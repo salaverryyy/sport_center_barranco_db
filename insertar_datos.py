@@ -14,18 +14,23 @@ conn = psycopg2.connect(
 cursor = conn.cursor()
 fake = Faker()
 
+# Usuario listo
 # Función para insertar datos en la tabla Usuario
 def insertar_usuarios(cursor, cantidad):
     for _ in range(cantidad):
         dni = fake.random_int(min=10000000, max=99999999)  # Genera un DNI aleatorio
         nombre = fake.name()
-        telefono = fake.phone_number()
+        # Generar un número de teléfono que comience con 9 y tenga exactamente 9 dígitos
+        telefono = "9" + ''.join([random.choice("0123456789") for _ in range(8)])  # 9 seguido de 8 dígitos aleatorios
+
         distrito = random.choice(["Barranco", "Miraflores", "San Isidro", "Chorrilos", "Lince"])  # Aleatorio
         cursor.execute("""
             INSERT INTO Usuario (dni, nombre, telefono, distrito)
             VALUES (%s, %s, %s, %s)
         """, (dni, nombre, telefono, distrito))
 
+
+#Tipo Cancha listo
 # Función para insertar datos en la tabla TipoCancha
 def insertar_tipocancha(cursor):
     # Insertamos los diferentes tipos de cancha con el nombre como id
@@ -39,10 +44,12 @@ def insertar_tipocancha(cursor):
     ]
     for t in tipocanchas:
         cursor.execute("""
-            INSERT INTO TipoCancha (id_tipo_cancha, deporte,tamaño, superficie, precio_base_hora)
-            VALUES (%s, %s, %s, %s)
-        """, (t[0], t[1], t[2], t[3]))
+            INSERT INTO TipoCancha (id_tipo_cancha, deporte, tamaño, superficie, precio_base_hora)
+            VALUES (%s, %s, %s, %s, %s)
+        """, (t[0], t[1], t[2], t[3], t[4]))
 
+
+#Cancha Listo
 # Función para insertar datos en la tabla Cancha
 def insertar_canchas(cursor):
     # La cantidad de canchas es limitada a la cantidad de tipos
@@ -59,37 +66,66 @@ def insertar_canchas(cursor):
             VALUES (%s, %s, %s)
         """, (i, c[1], c[0]))  # El id_tipo_cancha es ahora el nombre como VARCHAR
 
-
+#Horario listo
 # Función para insertar datos en la tabla Horario
-def insertar_horarios(cursor):
-    # El horario es desde 7 AM hasta 10 PM, con franjas de 1 o 2 horas
-    dias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes','Sabado','Domingo']
-    
-    # Se puede definir la cantidad de horas de cada reserva (en este caso 1, 2 hasta 3 horas)
+def insertar_horarios(cursor, cantidad):
+    # El horario es desde 7 AM hasta 10 PM, con franjas de 1, 2 o 3 horas
+    dias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sabado', 'Domingo']
     horas_disponibles = [1, 2, 3]  # reservas de 1, 2 hasta 3 horas
+    horario_id = 1  # Comenzamos el contador de id_horario desde 1
     
-    for dia in dias:
-        for hora in range(7, 22):  # Desde las 7 AM hasta las 10 PM
-            for duracion in horas_disponibles:
-                hora_inicio = f"{hora:02}:00"  # Formato de hora 07:00, 08:00, etc.
-                cursor.execute("""
-                    INSERT INTO Horario (dia_semana, hora_inicio, cant_horas)
-                    VALUES (%s, %s, %s)
-                """, (dia, hora_inicio, duracion))
+    horarios_insertados = 0  # Contador de horarios insertados
+    
+    while horarios_insertados < cantidad:  # Mientras no se hayan insertado la cantidad requerida de horarios
+        for dia in dias:
+            for hora in range(7, 22):  # Desde las 7 AM hasta las 10 PM
+                for duracion in horas_disponibles:
+                    hora_inicio = f"{hora:02}:00"  # Formato de hora 07:00, 08:00, etc.
+                    
+                    # Insertamos el horario en la base de datos
+                    cursor.execute("""
+                        INSERT INTO Horario (id_horario, dia_semana, hora_inicio, cant_horas)
+                        VALUES (%s, %s, %s, %s)
+                    """, (horario_id, dia, hora_inicio, duracion))
+                    
+                    horarios_insertados += 1  # Incrementamos el contador de horarios insertados
+                    horario_id += 1  # Incrementamos el id_horario para el siguiente
+                    
+                    # Si hemos insertado la cantidad de horarios que necesitamos, terminamos el bucle
+                    if horarios_insertados >= cantidad:
+                        break
+                if horarios_insertados >= cantidad:
+                    break
+            if horarios_insertados >= cantidad:
+                break
 
 
 
+# Reserva listo
 # Función para insertar datos en la tabla Reserva
 def insertar_reservas(cursor, cantidad):
     # Obtener todos los DNI existentes en la tabla Usuario
     cursor.execute("SELECT dni FROM Usuario")
     dni_usuarios = [row[0] for row in cursor.fetchall()]  # Lista de los DNI de usuarios existentes
     
-    for _ in range(cantidad):
+    # Obtener todos los ID de horarios existentes en la tabla Horario
+    cursor.execute("SELECT id_horario FROM Horario")
+    horarios_disponibles = [row[0] for row in cursor.fetchall()]  # Lista de los id_horarios existentes
+    
+    if len(horarios_disponibles) < cantidad:
+        raise ValueError("No hay suficientes horarios disponibles para asignar a las reservas.")
+
+    # Barajamos los horarios disponibles para asignar aleatoriamente
+    random.shuffle(horarios_disponibles)
+
+    for i in range(cantidad):
         # Elegir aleatoriamente un DNI de los usuarios existentes
         dni_usuario = random.choice(dni_usuarios)  # Solo tomamos usuarios existentes
+        
+        # Asignamos un horario único de los horarios disponibles
+        id_horario = horarios_disponibles.pop()  # Sacamos un horario único de la lista (y lo eliminamos de la lista)
+        
         id_cancha = random.randint(1, 13)  # 13 canchas disponibles
-        id_horario = random.randint(1, 39)  # 39 horarios disponibles
         fecha = fake.date_this_year()  # Fecha aleatoria dentro del año
         estado = random.choice(["pendiente", "pagada", "cancelada"])  # "pagada", "pendiente", "cancelada"
         
@@ -99,35 +135,49 @@ def insertar_reservas(cursor, cantidad):
             VALUES (%s, %s, %s, %s, %s)
         """, (dni_usuario, id_cancha, id_horario, fecha, estado))
 
-        # Si el estado es "pagada", insertar el pago correspondiente
-        if estado == "pagada":
-            # Elegimos aleatoriamente el medio de pago (Yape, Plin o Tarjeta)
-            medio_pago = random.choice(["Yape", "Plin", "Visa", "MasterCard"])
-            cursor.execute("""
-                INSERT INTO Pago (id_reserva, medio_pago, monto_pagado, fecha_pago)
-                VALUES (currval('reserva_id_reserva_seq'), %s, (SELECT costo_total FROM Reserva WHERE id_reserva = currval('reserva_id_reserva_seq')), %s)
-            """, (medio_pago, fecha))
 
-
+# Pago listo
 # Función para insertar datos en la tabla Pago
-def insertar_pagos(cursor, cantidad):
-    for _ in range(cantidad):
-        id_reserva = random.randint(1, 10000)  # Aleatorio de las reservas generadas
-        medio_pago = random.choice(["Yape", "Plin", "Visa", "MasterCard"])
-        monto_pagado = random.uniform(50.0, 200.0)  # Asumimos que pagan el costo total
-        fecha_pago = fake.date_this_year()
+def insertar_pagos(cursor):
+    # Obtener todas las reservas con estado "pagada"
+    cursor.execute("SELECT id_reserva, costo_total, fecha FROM Reserva WHERE estado = 'pagada'")
+    reservas_pagadas = cursor.fetchall()  # Lista de reservas pagadas con su costo_total y fecha
+
+    # Verificamos si hay reservas pagadas para asignar los pagos
+    if len(reservas_pagadas) == 0:
+        print("No hay reservas con estado 'pagada' para asignar pagos.")
+        return  # Si no hay reservas pagadas, terminamos la función
+
+    # Barajamos las reservas pagadas para asignar aleatoriamente los pagos
+    random.shuffle(reservas_pagadas)
+    
+    for reserva in reservas_pagadas:
+        id_reserva, costo_total, fecha_reserva = reserva
+        
+        # Generamos un medio de pago aleatorio
+        medio_pago = random.choice(["Yape", "Plin", "Tarjeta"])
+        
+        # Generamos una fecha de pago aleatoria: debe ser el mismo día o antes de la fecha de la reserva
+        fecha_pago = fake.date_this_year()  # Fecha aleatoria dentro del año
+        while fecha_pago > fecha_reserva:  # Aseguramos que la fecha de pago sea igual o antes de la reserva
+            fecha_pago = fake.date_this_year()  # Repetimos si la fecha es posterior a la fecha de la reserva
+        
+        # Insertamos el pago en la tabla Pago
         cursor.execute("""
             INSERT INTO Pago (id_reserva, medio_pago, monto_pagado, fecha_pago)
             VALUES (%s, %s, %s, %s)
-        """, (id_reserva, medio_pago, monto_pagado, fecha_pago))
+        """, (id_reserva, medio_pago, costo_total, fecha_pago))  # El monto pagado es igual al costo_total de la reserva
+
+
+
 
 # Inserta 10,000 usuarios, 13 canchas, 39 horarios y 10,000 reservas como ejemplo
-insertar_usuarios(cursor, 10000)
+insertar_usuarios(cursor, 1000)
 insertar_tipocancha(cursor)
 insertar_canchas(cursor)
-insertar_horarios(cursor)
-insertar_reservas(cursor, 10000)
-insertar_pagos(cursor, 800)  # 800 pagos para reservas pagadas, el resto será pendiente o cancelado
+insertar_horarios(cursor,1000)
+insertar_reservas(cursor, 1000)
+insertar_pagos(cursor)  # 800 pagos para reservas pagadas, el resto será pendiente o cancelado
 
 # Guardar los cambios
 conn.commit()
