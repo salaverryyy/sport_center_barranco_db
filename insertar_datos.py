@@ -14,6 +14,11 @@ conn = psycopg2.connect(
 cursor = conn.cursor()
 fake = Faker()
 
+# Cambiar el esquema al que se conectará el cursor para insertar datos
+def set_schema(cursor, esquema):
+    cursor.execute(f'SET search_path TO {esquema};')
+
+
 # Usuario listo
 # Función para insertar datos en la tabla Usuario
 def insertar_usuarios(cursor, cantidad):
@@ -173,13 +178,13 @@ def insertar_pagos(cursor):
 
 
 
-# Inserta 10,000 usuarios, 13 canchas, 39 horarios y 10,000 reservas como ejemplo
-insertar_usuarios(cursor, 1000)
+set_schema(cursor, 'datos_100k')
+insertar_usuarios(cursor, 100000)
 insertar_tipocancha(cursor)
 insertar_canchas(cursor)
-insertar_horarios(cursor,1000)
-insertar_reservas(cursor, 1000)
-insertar_pagos(cursor)  # 800 pagos para reservas pagadas, el resto será pendiente o cancelado
+insertar_horarios(cursor,100000)
+insertar_reservas(cursor, 100000)
+insertar_pagos(cursor) 
 
 # Guardar los cambios
 conn.commit()
