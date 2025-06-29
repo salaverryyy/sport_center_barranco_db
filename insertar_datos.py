@@ -17,8 +17,10 @@ fake = Faker()
 # Usuario listo
 # Función para insertar datos en la tabla Usuario
 def insertar_usuarios(cursor, cantidad):
+    dni_contador = 11111111  # Inicializar el contador de DNI
     for _ in range(cantidad):
-        dni = fake.random_int(min=10000000, max=99999999)  # Genera un DNI aleatorio
+        dni = dni_contador  # Asignar el DNI desde el contador
+        dni_contador += 1  # Incrementar el contador en 1 para el siguiente DNI
         nombre = fake.name()
         # Generar un número de teléfono que comience con 9 y tenga exactamente 9 dígitos
         telefono = "9" + ''.join([random.choice("0123456789") for _ in range(8)])  # 9 seguido de 8 dígitos aleatorios
